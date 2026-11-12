@@ -12,8 +12,15 @@
   }
   * { box-sizing: border-box; }
   body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); }
-  header { background: var(--primary); color: #fff; padding: 16px; }
-  header h1 { margin: 0 auto; max-width: 1100px; font-size: 1.35rem; }
+  header { background: var(--primary); color: #fff; padding: 12px 16px; }
+  .topo { margin: 0 auto; max-width: 1100px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  header h1 { margin: 0; font-size: 1.35rem; flex: 1 1 auto; }
+  .usuario { display: flex; align-items: center; gap: 10px; font-size: .9rem; }
+  .btn-header { background: rgba(255,255,255,.15); color: #fff; border: 1px solid rgba(255,255,255,.35); padding: 8px 14px; }
+  .btn-header:hover { background: rgba(255,255,255,.25); }
+  body:not(.logado) .so-logado { display: none !important; }
+  body.logado .so-visitante { display: none !important; }
+  .aviso-visitante { background: #e8f0fe; color: var(--primary-dark); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: .9rem; }
   main { max-width: 1100px; margin: 0 auto; padding: 16px; }
 
   .barra { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
@@ -79,13 +86,23 @@
 </style>
 </head>
 <body>
-<header><h1>🔌 Estoque de Componentes — Eletrônica</h1></header>
+<header>
+  <div class="topo">
+    <h1>🔌 Estoque de Componentes — Eletrônica</h1>
+    <div class="usuario">
+      <span class="so-logado" id="emailUsuario"></span>
+      <button class="btn-header so-logado" id="btnSair">Sair</button>
+      <button class="btn-header so-visitante" id="btnEntrar">Entrar para editar</button>
+    </div>
+  </div>
+</header>
 
 <main>
+  <div class="aviso-visitante so-visitante">Você está no modo consulta. Para cadastrar ou alterar componentes, clique em <b>Entrar para editar</b>.</div>
   <div class="barra">
     <input type="search" id="busca" placeholder="Buscar por nome, local, categoria... (ex: resistor 10k, gaveta 76)" autofocus>
     <select id="filtroCat"><option value="">Todas as categorias</option></select>
-    <button class="btn-primario" id="btnNovo">+ Cadastrar componente</button>
+    <button class="btn-primario so-logado" id="btnNovo">+ Cadastrar componente</button>
   </div>
 
   <div class="resumo" id="resumo"></div>
@@ -142,14 +159,39 @@
   </form>
 </dialog>
 
+<dialog id="dlgLogin">
+  <form id="formLogin" novalidate>
+    <h2>Entrar para editar</h2>
+    <label>E-mail
+      <input name="email" type="email" required autocomplete="username">
+    </label>
+    <label>Senha
+      <input name="senha" type="password" required autocomplete="current-password">
+    </label>
+    <p class="erro" id="erroLogin"></p>
+    <div class="rodape">
+      <button type="button" class="btn-sec" id="btnCancelarLogin">Cancelar</button>
+      <button type="submit" class="btn-primario">Entrar</button>
+    </div>
+  </form>
+</dialog>
+
 <datalist id="locais"></datalist>
 <datalist id="categorias"></datalist>
 <div id="toast"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.min.js"></script>
 <script>
-const API = "/api/componentes";
+// ---------- Configuração do Supabase ----------
+// Esta chave é pública (feita para ficar na página). A segurança vem das
+// regras do banco em supabase/schema.sql: todos consultam, só logados editam.
+const SUPABASE_URL = "https://ydusmgfkfpnwcsgbkblr.supabase.co";
+const SUPABASE_KEY = "sb_publishable_ej7JUq1MNeYQ2yClKf5s3g_xlyJ5j9v";
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
 let itens = [];
 let editandoId = null;
+let usuario = null;
 let ordem = { campo: "nome", asc: true };
 
 const $ = (s) => document.querySelector(s);
@@ -161,27 +203,35 @@ function toast(msg) {
   t.textContent = msg;
   t.classList.add("show");
   clearTimeout(t._h);
-  t._h = setTimeout(() => t.classList.remove("show"), 2200);
+  t._h = setTimeout(() => t.classList.remove("show"), 2600);
 }
 
-async function api(metodo, url, corpo) {
-  const r = await fetch(url, {
-    method: metodo,
-    headers: corpo ? { "Content-Type": "application/json" } : {},
-    body: corpo ? JSON.stringify(corpo) : undefined,
-  });
-  const dados = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(dados.erro || "Erro na comunicação com o servidor");
-  return dados;
+// Traduz os erros mais comuns do banco para mensagens amigáveis
+function mensagemErro(error) {
+  const m = error?.message || String(error);
+  if (/Invalid login credentials/i.test(m)) return "E-mail ou senha incorretos.";
+  if (/Email not confirmed/i.test(m)) return "Este e-mail ainda não foi confirmado.";
+  if (/row-level security|permission denied|JWT/i.test(m)) return "Você precisa entrar para fazer alterações.";
+  if (/quantidade_check/i.test(m)) return "A quantidade não pode ficar negativa.";
+  if (/check constraint/i.test(m)) return "Algum campo está vazio ou grande demais.";
+  if (/Failed to fetch|NetworkError/i.test(m)) return "Sem conexão com a internet.";
+  return m;
+}
+
+function validar(d) {
+  const erros = [];
+  if (!d.nome) erros.push("Informe o nome do componente.");
+  if (!d.local) erros.push("Informe onde o componente está (ex: Gaveta 76).");
+  if (!Number.isInteger(d.quantidade) || d.quantidade < 0) erros.push("Quantidade deve ser um número inteiro ≥ 0.");
+  if (!Number.isInteger(d.minimo) || d.minimo < 0) erros.push("Estoque mínimo deve ser um número inteiro ≥ 0.");
+  return erros.join(" ");
 }
 
 async function carregar() {
-  try {
-    itens = await api("GET", API);
-    render();
-  } catch (e) {
-    toast("Não foi possível carregar o estoque: " + e.message);
-  }
+  const { data, error } = await db.from("componentes").select("*").order("nome");
+  if (error) return toast("Não foi possível carregar o estoque: " + mensagemErro(error));
+  itens = data;
+  render();
 }
 
 function render() {
@@ -219,18 +269,18 @@ function render() {
       <td class="c-cat"><span class="tag">${esc(i.categoria) || "—"}</span></td>
       <td><span class="local">📍 ${esc(i.local)}</span></td>
       <td><div class="qtd">
-        <button data-acao="menos" title="Retirar 1" aria-label="Retirar 1">−</button>
+        <button class="so-logado" data-acao="menos" title="Retirar 1" aria-label="Retirar 1">−</button>
         <span>${i.quantidade}</span>
-        <button data-acao="mais" title="Adicionar 1" aria-label="Adicionar 1">+</button>
+        <button class="so-logado" data-acao="mais" title="Adicionar 1" aria-label="Adicionar 1">+</button>
       </div></td>
-      <td class="c-acoes acoes"><button class="btn-sec" data-acao="editar">Editar</button></td>
+      <td class="c-acoes acoes"><button class="btn-sec so-logado" data-acao="editar">Editar</button></td>
     </tr>`;
   }).join("");
 
   const vazio = $("#vazio");
   vazio.hidden = lista.length > 0;
   vazio.textContent = itens.length === 0
-    ? "Nenhum componente cadastrado ainda. Clique em “+ Cadastrar componente” para começar."
+    ? (usuario ? "Nenhum componente cadastrado ainda. Clique em “+ Cadastrar componente” para começar." : "Nenhum componente cadastrado ainda.")
     : "Nenhum componente encontrado para essa busca.";
 
   const total = itens.reduce((s, i) => s + i.quantidade, 0);
@@ -247,7 +297,43 @@ function render() {
   });
 }
 
-// ---------- Formulário ----------
+// ---------- Login ----------
+const dlgLogin = $("#dlgLogin"), formLogin = $("#formLogin");
+
+function aplicarSessao(session) {
+  usuario = session?.user ?? null;
+  document.body.classList.toggle("logado", !!usuario);
+  $("#emailUsuario").textContent = usuario?.email ?? "";
+  render();
+}
+
+$("#btnEntrar").addEventListener("click", () => {
+  formLogin.reset();
+  $("#erroLogin").textContent = "";
+  dlgLogin.showModal();
+  formLogin.elements.email.focus();
+});
+$("#btnCancelarLogin").addEventListener("click", () => dlgLogin.close());
+
+formLogin.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const { error } = await db.auth.signInWithPassword({
+    email: formLogin.elements.email.value.trim(),
+    password: formLogin.elements.senha.value,
+  });
+  if (error) return ($("#erroLogin").textContent = mensagemErro(error));
+  dlgLogin.close();
+  toast("Bem-vindo! Agora você pode editar o estoque.");
+});
+
+$("#btnSair").addEventListener("click", async () => {
+  await db.auth.signOut();
+  toast("Você saiu. Modo consulta.");
+});
+
+db.auth.onAuthStateChange((_evento, session) => aplicarSessao(session));
+
+// ---------- Formulário de componente ----------
 const dlg = $("#dlg"), form = $("#form");
 
 function abrir(item) {
@@ -263,18 +349,25 @@ function abrir(item) {
 
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
-  const dados = Object.fromEntries(new FormData(form));
-  dados.quantidade = dados.quantidade === "" ? NaN : Number(dados.quantidade);
-  dados.minimo = dados.minimo === "" ? 0 : Number(dados.minimo);
-  try {
-    if (editandoId) await api("PUT", `${API}/${editandoId}`, dados);
-    else await api("POST", API, dados);
-    dlg.close();
-    toast(editandoId ? "Componente atualizado" : "Componente cadastrado");
-    carregar();
-  } catch (err) {
-    $("#erro").textContent = err.message;
-  }
+  const f = Object.fromEntries(new FormData(form));
+  const dados = {
+    nome: f.nome.trim(),
+    local: f.local.trim(),
+    categoria: f.categoria.trim(),
+    descricao: f.descricao.trim(),
+    quantidade: f.quantidade === "" ? NaN : Number(f.quantidade),
+    minimo: f.minimo === "" ? 0 : Number(f.minimo),
+  };
+  const erro = validar(dados);
+  if (erro) return ($("#erro").textContent = erro);
+
+  const { error } = editandoId
+    ? await db.from("componentes").update(dados).eq("id", editandoId)
+    : await db.from("componentes").insert(dados);
+  if (error) return ($("#erro").textContent = mensagemErro(error));
+  dlg.close();
+  toast(editandoId ? "Componente atualizado" : "Componente cadastrado");
+  carregar();
 });
 
 $("#btnExcluir").addEventListener("click", async (e) => {
@@ -285,14 +378,11 @@ $("#btnExcluir").addEventListener("click", async (e) => {
     setTimeout(() => { delete btn.dataset.confirmar; btn.textContent = "Excluir"; }, 3000);
     return;
   }
-  try {
-    await api("DELETE", `${API}/${editandoId}`);
-    dlg.close();
-    toast("Componente excluído");
-    carregar();
-  } catch (err) {
-    $("#erro").textContent = err.message;
-  }
+  const { error } = await db.from("componentes").delete().eq("id", editandoId);
+  if (error) return ($("#erro").textContent = mensagemErro(error));
+  dlg.close();
+  toast("Componente excluído");
+  carregar();
 });
 
 $("#btnCancelar").addEventListener("click", () => dlg.close());
@@ -309,22 +399,33 @@ document.querySelectorAll("th[data-ord]").forEach((th) => th.addEventListener("c
 // Botões + / − / Editar na lista
 $("#lista").addEventListener("click", async (e) => {
   const btn = e.target.closest("button[data-acao]");
-  if (!btn) return;
+  if (!btn || !usuario) return;
   const item = itens.find((i) => i.id === btn.closest("tr").dataset.id);
   if (!item) return;
   if (btn.dataset.acao === "editar") return abrir(item);
-  const nova = item.quantidade + (btn.dataset.acao === "mais" ? 1 : -1);
-  if (nova < 0) return;
-  try {
-    Object.assign(item, await api("PUT", `${API}/${item.id}`, { quantidade: nova }));
-    render();
-  } catch (err) {
-    toast(err.message);
-  }
+  const delta = btn.dataset.acao === "mais" ? 1 : -1;
+  if (item.quantidade + delta < 0) return;
+  btn.disabled = true;
+  const { data, error } = await db.rpc("ajustar_quantidade", { p_id: item.id, p_delta: delta }).single();
+  btn.disabled = false;
+  if (error) return toast(mensagemErro(error));
+  Object.assign(item, data);
+  render();
 });
 
-// Atualiza sozinho a cada 15s (para ver mudanças feitas por outras pessoas)
-setInterval(() => { if (!dlg.open) carregar(); }, 15000);
+// ---------- Tempo real ----------
+// Quando alguém altera o estoque em outro celular/PC, a lista atualiza sozinha.
+let recarga;
+db.channel("estoque")
+  .on("postgres_changes", { event: "*", schema: "public", table: "componentes" }, () => {
+    clearTimeout(recarga);
+    recarga = setTimeout(carregar, 300);
+  })
+  .subscribe();
+
+// Plano B caso o tempo real caia: recarrega ao voltar para a aba
+document.addEventListener("visibilitychange", () => { if (!document.hidden && !dlg.open) carregar(); });
+
 carregar();
 </script>
 </body>

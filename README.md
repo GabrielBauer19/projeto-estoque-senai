@@ -1,33 +1,25 @@
 # 3weatMjoEWotU6BS
 
-Sistema web simples para mostrar o estoque de componentes do curso de eletrônica e **onde cada um está guardado** (ex: Gaveta 76).
+Sistema web para mostrar o estoque de componentes do curso de eletrônica e **onde cada um está guardado** (ex: Gaveta 76). Funciona online, de qualquer celular ou computador, sem precisar de nenhum PC ligado.
 
 ## Funcionalidades
 
-- Cadastrar componente com nome, local, categoria, quantidade, estoque mínimo e observação
-- Busca instantânea (ex: `resistor 10k`, `gaveta 76`) e filtro por categoria
-- Botões **+ / −** para ajustar a quantidade rapidamente
+- **Qualquer pessoa** pode consultar: busca instantânea (ex: `resistor 10k`, `gaveta 76`) e filtro por categoria
+- **Quem faz login** pode cadastrar, editar, excluir e usar os botões **+ / −** de quantidade
 - Aviso de componente **acabando** (abaixo do mínimo) ou **em falta**
+- Atualização em **tempo real**: quando alguém altera, todo mundo vê na hora
 - Funciona no computador e no celular
-- Atualiza sozinho a cada 15 segundos (vê o que os outros alteraram)
 
-## Como rodar
+## Tecnologias
 
-Precisa apenas do [Node.js](https://nodejs.org) (versão 18 ou mais nova). Não tem dependências para instalar.
+- **Página:** HTML, CSS e JavaScript puro, hospedada no **GitHub Pages**
+- **Banco de dados:** **Supabase** (PostgreSQL), com regras de segurança (RLS): consulta pública, alteração só para usuários logados
+- Estrutura do banco: [`supabase/schema.sql`](supabase/schema.sql)
 
-```bash
-npm start
-```
+## Como dar acesso de edição a alguém
 
-Ou dê dois cliques em `iniciar.bat` no Windows.
+No painel do Supabase: **Authentication → Users → Add user → Create new user**, informe e-mail e senha e marque **Auto Confirm User**.
 
-O terminal mostra os endereços de acesso:
+## Backup
 
-- **Neste computador:** http://localhost:3000
-- **Outros computadores/celulares na mesma rede Wi-Fi:** `http://<IP-do-computador>:3000` (o endereço aparece no terminal)
-
-> Na primeira vez, o Windows pode perguntar se permite o Node.js na rede — clique em **Permitir** (rede privada), senão os outros não conseguem acessar.
-
-## Onde ficam os dados
-
-Tudo é salvo em `data/estoque.json`. Para enviar um backup para o GitHub, dê dois cliques em `backup.bat`.
+No painel do Supabase: **Table Editor → componentes → Export → CSV**.
