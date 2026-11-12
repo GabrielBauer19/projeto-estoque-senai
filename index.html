@@ -341,6 +341,7 @@ function abrir(item) {
   form.reset();
   $("#erro").textContent = "";
   $("#dlgTitulo").textContent = item ? "Editar componente" : "Cadastrar componente";
+  resetarExcluir();
   $("#btnExcluir").hidden = !item;
   if (item) for (const k of ["nome", "local", "categoria", "quantidade", "minimo", "descricao"]) form.elements[k].value = item[k] ?? "";
   dlg.showModal();
@@ -370,14 +371,24 @@ form.addEventListener("submit", async (e) => {
   carregar();
 });
 
+// Volta o botão Excluir ao normal (sem confirmação pendente)
+let timerExcluir;
+function resetarExcluir() {
+  clearTimeout(timerExcluir);
+  const btn = $("#btnExcluir");
+  delete btn.dataset.confirmar;
+  btn.textContent = "Excluir";
+}
+
 $("#btnExcluir").addEventListener("click", async (e) => {
   const btn = e.currentTarget;
   if (!btn.dataset.confirmar) {
     btn.dataset.confirmar = "1";
     btn.textContent = "Clique de novo para confirmar";
-    setTimeout(() => { delete btn.dataset.confirmar; btn.textContent = "Excluir"; }, 3000);
+    timerExcluir = setTimeout(resetarExcluir, 3000);
     return;
   }
+  resetarExcluir();
   const { error } = await db.from("componentes").delete().eq("id", editandoId);
   if (error) return ($("#erro").textContent = mensagemErro(error));
   dlg.close();
