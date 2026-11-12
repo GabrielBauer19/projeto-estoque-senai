@@ -30,4 +30,4 @@ O terminal mostra os endereços de acesso:
 
 ## Onde ficam os dados
 
-Tudo é salvo em `data/estoque.json`. Para fazer backup, basta copiar esse arquivo.
+Tudo é salvo em `data/estoque.json`. Para enviar um backup para o GitHub, dê dois cliques em `backup.bat`.
