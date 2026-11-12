@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Estoque de Componentes</title>
+<style>
+  :root {
+    --bg: #f4f6f9; --card: #fff; --text: #1d2430; --muted: #667085; --line: #e3e7ee;
+    --primary: #0b63ce; --primary-dark: #084c9e; --danger: #c62828; --warn-bg: #fff4e5; --warn: #b54708;
+    --ok-bg: #e8f5ec; --ok: #1e7a3c;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); }
+  header { background: var(--primary); color: #fff; padding: 16px; }
+  header h1 { margin: 0 auto; max-width: 1100px; font-size: 1.35rem; }
+  main { max-width: 1100px; margin: 0 auto; padding: 16px; }
+
+  .barra { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+  .barra input[type=search] { flex: 1 1 260px; }
+  input, select, textarea { font: inherit; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: #fff; width: 100%; }
+  input:focus, select:focus, textarea:focus { outline: 2px solid var(--primary); border-color: transparent; }
+  .barra select { flex: 0 1 200px; width: auto; }
+
+  button { font: inherit; cursor: pointer; border: 0; border-radius: 8px; padding: 10px 16px; }
+  .btn-primario { background: var(--primary); color: #fff; font-weight: 600; }
+  .btn-primario:hover { background: var(--primary-dark); }
+  .btn-sec { background: #eef1f6; color: var(--text); }
+  .btn-sec:hover { background: #e1e6ee; }
+  .btn-perigo { background: transparent; color: var(--danger); }
+
+  .resumo { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; color: var(--muted); font-size: .9rem; }
+  .resumo b { color: var(--text); }
+
+  .tabela-wrap { background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { padding: 12px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  th { font-size: .8rem; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); background: #fafbfc; cursor: pointer; user-select: none; white-space: nowrap; }
+  tr:last-child td { border-bottom: 0; }
+  .nome { font-weight: 600; }
+  .desc { color: var(--muted); font-size: .85rem; margin-top: 2px; }
+  .local { display: inline-block; background: #e8f0fe; color: var(--primary-dark); font-weight: 600; padding: 4px 10px; border-radius: 999px; white-space: nowrap; }
+  .tag { font-size: .8rem; color: var(--muted); }
+  .qtd { display: flex; align-items: center; gap: 6px; }
+  .qtd button { width: 32px; height: 32px; padding: 0; background: #eef1f6; font-weight: 700; }
+  .qtd span { min-width: 42px; text-align: center; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .baixo .qtd span { color: var(--warn); }
+  .zero .qtd span { color: var(--danger); }
+  .badge { font-size: .72rem; padding: 2px 8px; border-radius: 999px; font-weight: 600; white-space: nowrap; }
+  .badge.warn { background: var(--warn-bg); color: var(--warn); }
+  .badge.zero { background: #fdecea; color: var(--danger); }
+  .acoes { white-space: nowrap; text-align: right; }
+  .vazio { padding: 40px 16px; text-align: center; color: var(--muted); }
+
+  dialog { border: 0; border-radius: 14px; padding: 0; width: min(520px, calc(100% - 32px)); box-shadow: 0 20px 60px rgba(0,0,0,.25); }
+  dialog::backdrop { background: rgba(15,23,42,.45); }
+  dialog form { padding: 20px; display: grid; gap: 12px; }
+  dialog h2 { margin: 0 0 4px; font-size: 1.15rem; }
+  label { display: grid; gap: 4px; font-size: .9rem; font-weight: 600; }
+  label small { font-weight: 400; color: var(--muted); }
+  .linha { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .rodape { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+  .erro { color: var(--danger); font-size: .9rem; min-height: 1.2em; margin: 0; }
+
+  #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #1d2430; color: #fff; padding: 10px 18px; border-radius: 8px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  #toast.show { opacity: 1; }
+
+  /* Celular: tabela vira cartões */
+  @media (max-width: 680px) {
+    thead { display: none; }
+    table, tbody, tr, td { display: block; width: 100%; }
+    tr { border-bottom: 1px solid var(--line); padding: 10px 12px; display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; }
+    td { border: 0; padding: 0; }
+    td.c-nome { grid-column: 1 / -1; }
+    td.c-cat { display: none; }
+    td.c-acoes { grid-column: 1 / -1; text-align: left; }
+    .linha { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<header><h1>🔌 Estoque de Componentes — Eletrônica</h1></header>
+
+<main>
+  <div class="barra">
+    <input type="search" id="busca" placeholder="Buscar por nome, local, categoria... (ex: resistor 10k, gaveta 76)" autofocus>
+    <select id="filtroCat"><option value="">Todas as categorias</option></select>
+    <button class="btn-primario" id="btnNovo">+ Cadastrar componente</button>
+  </div>
+
+  <div class="resumo" id="resumo"></div>
+
+  <div class="tabela-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th data-ord="nome">Componente</th>
+          <th data-ord="categoria">Categoria</th>
+          <th data-ord="local">Onde está</th>
+          <th data-ord="quantidade">Quantidade</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="lista"></tbody>
+    </table>
+    <div class="vazio" id="vazio" hidden></div>
+  </div>
+</main>
+
+<dialog id="dlg">
+  <form id="form" novalidate>
+    <h2 id="dlgTitulo">Cadastrar componente</h2>
+    <label>Nome do componente *
+      <input name="nome" required maxlength="120" placeholder="Ex: Resistor 10kΩ 1/4W">
+    </label>
+    <div class="linha">
+      <label>Onde está *
+        <input name="local" required maxlength="80" placeholder="Ex: Gaveta 76" list="locais">
+      </label>
+      <label>Categoria
+        <input name="categoria" maxlength="60" placeholder="Ex: Resistores" list="categorias">
+      </label>
+    </div>
+    <div class="linha">
+      <label>Quantidade *
+        <input name="quantidade" type="number" min="0" step="1" required value="0" inputmode="numeric">
+      </label>
+      <label>Estoque mínimo <small>avisa quando estiver acabando</small>
+        <input name="minimo" type="number" min="0" step="1" value="0" inputmode="numeric">
+      </label>
+    </div>
+    <label>Observação
+      <textarea name="descricao" rows="2" maxlength="300" placeholder="Ex: encapsulamento DIP-8, datasheet no drive..."></textarea>
+    </label>
+    <p class="erro" id="erro"></p>
+    <div class="rodape">
+      <button type="button" class="btn-perigo" id="btnExcluir" hidden>Excluir</button>
+      <span style="flex:1"></span>
+      <button type="button" class="btn-sec" id="btnCancelar">Cancelar</button>
+      <button type="submit" class="btn-primario">Salvar</button>
+    </div>
+  </form>
+</dialog>
+
+<datalist id="locais"></datalist>
+<datalist id="categorias"></datalist>
+<div id="toast"></div>
+
+<script>
+const API = "/api/componentes";
+let itens = [];
+let editandoId = null;
+let ordem = { campo: "nome", asc: true };
+
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const norm = (s) => String(s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+
+function toast(msg) {
+  const t = $("#toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(t._h);
+  t._h = setTimeout(() => t.classList.remove("show"), 2200);
+}
+
+async function api(metodo, url, corpo) {
+  const r = await fetch(url, {
+    method: metodo,
+    headers: corpo ? { "Content-Type": "application/json" } : {},
+    body: corpo ? JSON.stringify(corpo) : undefined,
+  });
+  const dados = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(dados.erro || "Erro na comunicação com o servidor");
+  return dados;
+}
+
+async function carregar() {
+  try {
+    itens = await api("GET", API);
+    render();
+  } catch (e) {
+    toast("Não foi possível carregar o estoque: " + e.message);
+  }
+}
+
+function render() {
+  // filtros (categorias e sugestões)
+  const cats = [...new Set(itens.map((i) => i.categoria).filter(Boolean))].sort((a, b) => a.localeCompare(b, "pt-BR"));
+  const locais = [...new Set(itens.map((i) => i.local).filter(Boolean))].sort((a, b) => a.localeCompare(b, "pt-BR", { numeric: true }));
+  const sel = $("#filtroCat"), atual = sel.value;
+  sel.innerHTML = '<option value="">Todas as categorias</option>' + cats.map((c) => `<option>${esc(c)}</option>`).join("");
+  sel.value = cats.includes(atual) ? atual : "";
+  $("#categorias").innerHTML = cats.map((c) => `<option value="${esc(c)}">`).join("");
+  $("#locais").innerHTML = locais.map((c) => `<option value="${esc(c)}">`).join("");
+
+  // busca: todas as palavras precisam aparecer em algum campo
+  const termos = norm($("#busca").value).split(/\s+/).filter(Boolean);
+  const cat = sel.value;
+  let lista = itens.filter((i) => {
+    if (cat && i.categoria !== cat) return false;
+    const alvo = norm([i.nome, i.local, i.categoria, i.descricao].join(" "));
+    return termos.every((t) => alvo.includes(t));
+  });
+
+  const { campo, asc } = ordem;
+  lista.sort((a, b) => {
+    const r = campo === "quantidade" ? a.quantidade - b.quantidade
+      : String(a[campo] ?? "").localeCompare(String(b[campo] ?? ""), "pt-BR", { numeric: true, sensitivity: "base" });
+    return asc ? r : -r;
+  });
+
+  $("#lista").innerHTML = lista.map((i) => {
+    const zero = i.quantidade === 0;
+    const baixo = !zero && i.minimo > 0 && i.quantidade <= i.minimo;
+    const badge = zero ? '<span class="badge zero">Em falta</span>' : baixo ? '<span class="badge warn">Acabando</span>' : "";
+    return `<tr class="${zero ? "zero" : baixo ? "baixo" : ""}" data-id="${esc(i.id)}">
+      <td class="c-nome"><div class="nome">${esc(i.nome)} ${badge}</div>${i.descricao ? `<div class="desc">${esc(i.descricao)}</div>` : ""}</td>
+      <td class="c-cat"><span class="tag">${esc(i.categoria) || "—"}</span></td>
+      <td><span class="local">📍 ${esc(i.local)}</span></td>
+      <td><div class="qtd">
+        <button data-acao="menos" title="Retirar 1" aria-label="Retirar 1">−</button>
+        <span>${i.quantidade}</span>
+        <button data-acao="mais" title="Adicionar 1" aria-label="Adicionar 1">+</button>
+      </div></td>
+      <td class="c-acoes acoes"><button class="btn-sec" data-acao="editar">Editar</button></td>
+    </tr>`;
+  }).join("");
+
+  const vazio = $("#vazio");
+  vazio.hidden = lista.length > 0;
+  vazio.textContent = itens.length === 0
+    ? "Nenhum componente cadastrado ainda. Clique em “+ Cadastrar componente” para começar."
+    : "Nenhum componente encontrado para essa busca.";
+
+  const total = itens.reduce((s, i) => s + i.quantidade, 0);
+  const falta = itens.filter((i) => i.quantidade === 0).length;
+  const acabando = itens.filter((i) => i.quantidade > 0 && i.minimo > 0 && i.quantidade <= i.minimo).length;
+  $("#resumo").innerHTML = `<span><b>${itens.length}</b> tipos de componente</span>
+    <span><b>${total}</b> peças no total</span>
+    ${acabando ? `<span>⚠️ <b>${acabando}</b> acabando</span>` : ""}
+    ${falta ? `<span>❌ <b>${falta}</b> em falta</span>` : ""}
+    ${termos.length || cat ? `<span>Mostrando <b>${lista.length}</b></span>` : ""}`;
+
+  document.querySelectorAll("th[data-ord]").forEach((th) => {
+    th.textContent = th.textContent.replace(/ [▲▼]$/, "") + (th.dataset.ord === campo ? (asc ? " ▲" : " ▼") : "");
+  });
+}
+
+// ---------- Formulário ----------
+const dlg = $("#dlg"), form = $("#form");
+
+function abrir(item) {
+  editandoId = item?.id ?? null;
+  form.reset();
+  $("#erro").textContent = "";
+  $("#dlgTitulo").textContent = item ? "Editar componente" : "Cadastrar componente";
+  $("#btnExcluir").hidden = !item;
+  if (item) for (const k of ["nome", "local", "categoria", "quantidade", "minimo", "descricao"]) form.elements[k].value = item[k] ?? "";
+  dlg.showModal();
+  form.elements.nome.focus();
+}
+
+form.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const dados = Object.fromEntries(new FormData(form));
+  dados.quantidade = dados.quantidade === "" ? NaN : Number(dados.quantidade);
+  dados.minimo = dados.minimo === "" ? 0 : Number(dados.minimo);
+  try {
+    if (editandoId) await api("PUT", `${API}/${editandoId}`, dados);
+    else await api("POST", API, dados);
+    dlg.close();
+    toast(editandoId ? "Componente atualizado" : "Componente cadastrado");
+    carregar();
+  } catch (err) {
+    $("#erro").textContent = err.message;
+  }
+});
+
+$("#btnExcluir").addEventListener("click", async (e) => {
+  const btn = e.currentTarget;
+  if (!btn.dataset.confirmar) {
+    btn.dataset.confirmar = "1";
+    btn.textContent = "Clique de novo para confirmar";
+    setTimeout(() => { delete btn.dataset.confirmar; btn.textContent = "Excluir"; }, 3000);
+    return;
+  }
+  try {
+    await api("DELETE", `${API}/${editandoId}`);
+    dlg.close();
+    toast("Componente excluído");
+    carregar();
+  } catch (err) {
+    $("#erro").textContent = err.message;
+  }
+});
+
+$("#btnCancelar").addEventListener("click", () => dlg.close());
+$("#btnNovo").addEventListener("click", () => abrir());
+$("#busca").addEventListener("input", render);
+$("#filtroCat").addEventListener("change", render);
+
+document.querySelectorAll("th[data-ord]").forEach((th) => th.addEventListener("click", () => {
+  const campo = th.dataset.ord;
+  ordem = { campo, asc: ordem.campo === campo ? !ordem.asc : true };
+  render();
+}));
+
+// Botões + / − / Editar na lista
+$("#lista").addEventListener("click", async (e) => {
+  const btn = e.target.closest("button[data-acao]");
+  if (!btn) return;
+  const item = itens.find((i) => i.id === btn.closest("tr").dataset.id);
+  if (!item) return;
+  if (btn.dataset.acao === "editar") return abrir(item);
+  const nova = item.quantidade + (btn.dataset.acao === "mais" ? 1 : -1);
+  if (nova < 0) return;
+  try {
+    Object.assign(item, await api("PUT", `${API}/${item.id}`, { quantidade: nova }));
+    render();
+  } catch (err) {
+    toast(err.message);
+  }
+});
+
+// Atualiza sozinho a cada 15s (para ver mudanças feitas por outras pessoas)
+setInterval(() => { if (!dlg.open) carregar(); }, 15000);
+carregar();
+</script>
+</body>
+</html>

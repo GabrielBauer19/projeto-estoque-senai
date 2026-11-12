@@ -1,0 +1,10 @@
+{
+  "name": "estoque-componentes-senai",
+  "version": "1.0.0",
+  "description": "Sistema web para controlar o estoque de componentes eletrônicos e onde eles estão guardados",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "license": "MIT"
+}
