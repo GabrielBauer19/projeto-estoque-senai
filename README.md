@@ -1,4 +1,4 @@
-# 3weatMjoEWotU6BS
+# Estoque de Componentes — SENAI
 
 Sistema web para mostrar o estoque de componentes do curso de eletrônica e **onde cada um está guardado** (ex: Gaveta 76). Funciona online, de qualquer celular ou computador, sem precisar de nenhum PC ligado.
 
